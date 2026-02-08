@@ -16,9 +16,9 @@ class NodeCoordinate(BaseModel):
     """Single node coordinate entry."""
 
     node_name: str = Field(description="Node identifier (e.g., 'N1')")
-    x: float = Field(default=0.0, description="X coordinate in mm")
-    y: float = Field(default=0.0, description="Y coordinate in mm")
-    z: float = Field(default=0.0, description="Z coordinate in mm")
+    x: float = Field(default=0.0, description="X coordinate in meters")
+    y: float = Field(default=0.0, description="Y coordinate in meters")
+    z: float = Field(default=0.0, description="Z coordinate in meters")
 
 
 class NodeReaction(BaseModel):
@@ -26,12 +26,12 @@ class NodeReaction(BaseModel):
 
     node_name: str = Field(description="Node identifier (e.g., 'N1')")
     load_combo: str = Field(default="LC1", description="Load combination name")
-    fx: float = Field(default=0.0, description="Force in X direction (kN)")
-    fy: float = Field(default=0.0, description="Force in Y direction (kN)")
-    fz: float = Field(default=0.0, description="Axial force in Z direction (kN)")
-    mx: float = Field(default=0.0, description="Moment about X axis (kN·m)")
-    my: float = Field(default=0.0, description="Moment about Y axis (kN·m)")
-    mz: float = Field(default=0.0, description="Moment about Z axis (kN·m)")
+    F1: float = Field(default=0.0, description="Force in X direction (kN)")
+    F2: float = Field(default=0.0, description="Force in Y direction (kN)")
+    F3: float = Field(default=0.0, description="Axial force in Z direction (kN)")
+    M1: float = Field(default=0.0, description="Moment about X axis (kN·m)")
+    M2: float = Field(default=0.0, description="Moment about Y axis (kN·m)")
+    M3: float = Field(default=0.0, description="Moment about Z axis (kN·m)")
 
 
 class BearingCapacityEntry(BaseModel):
@@ -47,11 +47,11 @@ class SectionNodeCoords(BaseModel):
     node_coords: list[NodeCoordinate] = Field(
         default_factory=lambda: [
             NodeCoordinate(node_name="N1", x=0.0, y=0.0, z=0.0),
-            NodeCoordinate(node_name="N2", x=5000.0, y=0.0, z=0.0),
-            NodeCoordinate(node_name="N3", x=5000.0, y=5000.0, z=0.0),
-            NodeCoordinate(node_name="N4", x=0.0, y=5000.0, z=0.0),
+            NodeCoordinate(node_name="N2", x=5.0, y=0.0, z=0.0),
+            NodeCoordinate(node_name="N3", x=5.0, y=5.0, z=0.0),
+            NodeCoordinate(node_name="N4", x=0.0, y=5.0, z=0.0),
         ],
-        description="List of node coordinates from ETABS or structural software",
+        description="List of node coordinates from ETABS or structural software (in meters)",
     )
 
 
@@ -63,22 +63,22 @@ class SectionNodeReactions(BaseModel):
             NodeReaction(
                 node_name="N1",
                 load_combo="LC1",
-                fx=0.0,
-                fy=0.0,
-                fz=-15.0,
-                mx=10.0,
-                my=8.0,
-                mz=0.0,
+                F1=0.0,
+                F2=0.0,
+                F3=-15.0,
+                M1=10.0,
+                M2=8.0,
+                M3=0.0,
             ),
             NodeReaction(
                 node_name="N2",
                 load_combo="LC1",
-                fx=0.0,
-                fy=0.0,
-                fz=-20.0,
-                mx=15.0,
-                my=12.0,
-                mz=0.0,
+                F1=0.0,
+                F2=0.0,
+                F3=-20.0,
+                M1=15.0,
+                M2=12.0,
+                M3=0.0,
             ),
         ],
         description="List of reaction forces and moments for each node and load combination",
@@ -185,12 +185,17 @@ class OptimalFootingDesign(BaseModel):
     footing_h_mm: float = Field(description="Slab thickness h (mm)")
     foundation_depth_mm: float = Field(description="Total foundation depth (mm)")
     footing_area_m2: float = Field(description="Footing area (m²)")
-    total_weight_kN: float = Field(description="Total footing weight (kN)")
-    bearing_capacity_kPa: float = Field(description="Allowable bearing capacity (kPa)")
-    max_bearing_pressure_kPa: float = Field(
-        description="Maximum bearing pressure (kPa)"
-    )
     governing_combo: str = Field(description="Governing load combination")
+    # Optional fields not included in basic export
+    total_weight_kN: float | None = Field(
+        default=None, description="Total footing weight (kN)"
+    )
+    bearing_capacity_kPa: float | None = Field(
+        default=None, description="Allowable bearing capacity (kPa)"
+    )
+    max_bearing_pressure_kPa: float | None = Field(
+        default=None, description="Maximum bearing pressure (kPa)"
+    )
 
 
 class FootingDesignOutput(BaseModel):
@@ -287,10 +292,11 @@ class FootingDesignTool(ViktorTool):
                     + footing.get("thickness_h_mm", 0),
                     footing_area_m2=(footing.get("width_B_mm", 0) / 1000)
                     * (footing.get("length_L_mm", 0) / 1000),
-                    total_weight_kN=node.get("total_weight_kN", 0),
-                    bearing_capacity_kPa=node.get("bearing_capacity_kPa", 0),
-                    max_bearing_pressure_kPa=node.get("max_bearing_pressure_kPa", 0),
                     governing_combo=node.get("governing_load_combo", "N/A"),
+                    # Optional fields from extended output (not in basic export)
+                    total_weight_kN=node.get("total_weight_kN"),
+                    bearing_capacity_kPa=node.get("bearing_capacity_kPa"),
+                    max_bearing_pressure_kPa=node.get("max_bearing_pressure_kPa"),
                 )
             )
 
@@ -315,13 +321,13 @@ class FootingDesignFlatInput(BaseModel):
         default=["N1", "N2"],
         description="List of node names to analyze",
     )
-    node_x_coords_mm: list[float] = Field(
-        default=[0.0, 5000.0],
-        description="X coordinates for each node in mm",
+    node_x_coords_m: list[float] = Field(
+        default=[0.0, 5.0],
+        description="X coordinates for each node in meters",
     )
-    node_y_coords_mm: list[float] = Field(
+    node_y_coords_m: list[float] = Field(
         default=[0.0, 0.0],
-        description="Y coordinates for each node in mm",
+        description="Y coordinates for each node in meters",
     )
 
     # Axial loads per node (simplified - using maximum load for design)
@@ -379,13 +385,13 @@ async def calculate_footing_design_func(ctx: Any, args: str) -> str:
 
     # Build structured input from flat parameters
     node_names = raw_input.get("node_names", ["N1", "N2"])
-    node_x = raw_input.get("node_x_coords_mm", [0.0, 5000.0])
-    node_y = raw_input.get("node_y_coords_mm", [0.0, 0.0])
+    node_x = raw_input.get("node_x_coords_m", [0.0, 5.0])
+    node_y = raw_input.get("node_y_coords_m", [0.0, 0.0])
     axial_loads = raw_input.get("axial_loads_kN", [-15.0, -20.0])
     moments_mx = raw_input.get("moments_mx_kNm", [10.0, 15.0])
     moments_my = raw_input.get("moments_my_kNm", [8.0, 12.0])
 
-    # Build node coordinates
+    # Build node coordinates (already in meters)
     node_coords = []
     for i, name in enumerate(node_names):
         node_coords.append(
@@ -404,12 +410,12 @@ async def calculate_footing_design_func(ctx: Any, args: str) -> str:
             NodeReaction(
                 node_name=name,
                 load_combo="LC1",
-                fx=0.0,
-                fy=0.0,
-                fz=axial_loads[i] if i < len(axial_loads) else -15.0,
-                mx=moments_mx[i] if i < len(moments_mx) else 10.0,
-                my=moments_my[i] if i < len(moments_my) else 8.0,
-                mz=0.0,
+                F1=0.0,
+                F2=0.0,
+                F3=axial_loads[i] if i < len(axial_loads) else -15.0,
+                M1=moments_mx[i] if i < len(moments_mx) else 10.0,
+                M2=moments_my[i] if i < len(moments_my) else 8.0,
+                M3=0.0,
             )
         )
 
@@ -457,16 +463,17 @@ async def calculate_footing_design_func(ctx: Any, args: str) -> str:
     # Summarize successful designs
     design_summaries = []
     for d in result.designs:
-        design_summaries.append(
-            {
-                "node": d.node_name,
-                "footing_mm": f"{d.footing_B_mm}x{d.footing_L_mm}x{d.footing_h_mm}",
-                "pedestal_mm": f"{d.pedestal_size_mm}x{d.pedestal_height_mm}",
-                "area_m2": round(d.footing_area_m2, 2),
-                "weight_kN": round(d.total_weight_kN, 1),
-                "governing_combo": d.governing_combo,
-            }
-        )
+        summary = {
+            "node": d.node_name,
+            "footing_mm": f"{d.footing_B_mm:.0f}x{d.footing_L_mm:.0f}x{d.footing_h_mm:.0f}",
+            "pedestal_mm": f"{d.pedestal_size_mm:.0f}x{d.pedestal_height_mm:.0f}",
+            "area_m2": round(d.footing_area_m2, 2),
+            "governing_combo": d.governing_combo,
+        }
+        # Add optional fields if available
+        if d.total_weight_kN is not None:
+            summary["weight_kN"] = round(d.total_weight_kN, 1)
+        design_summaries.append(summary)
 
     result_json = {
         "project": result.project_name,
@@ -508,7 +515,7 @@ if __name__ == "__main__":
         section_node_coords=SectionNodeCoords(
             node_coords=[
                 NodeCoordinate(node_name="N1", x=0.0, y=0.0, z=0.0),
-                NodeCoordinate(node_name="N2", x=5000.0, y=0.0, z=0.0),
+                NodeCoordinate(node_name="N2", x=5.0, y=0.0, z=0.0),
             ]
         ),
         section_node_reactions=SectionNodeReactions(
@@ -516,16 +523,16 @@ if __name__ == "__main__":
                 NodeReaction(
                     node_name="N1",
                     load_combo="LC1",
-                    fz=-15.0,
-                    mx=10.0,
-                    my=8.0,
+                    F3=-15.0,
+                    M1=10.0,
+                    M2=8.0,
                 ),
                 NodeReaction(
                     node_name="N2",
                     load_combo="LC1",
-                    fz=-20.0,
-                    mx=15.0,
-                    my=12.0,
+                    F3=-20.0,
+                    M1=15.0,
+                    M2=12.0,
                 ),
             ]
         ),

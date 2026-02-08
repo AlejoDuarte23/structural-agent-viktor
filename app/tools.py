@@ -12,6 +12,8 @@ from app.viktor_tools.sensitivity_analysis_tool import (
 from app.viktor_tools.footing_design_tool import calculate_footing_design_tool
 from app.viktor_tools.plotting_tool import generate_plot, show_hide_plot_tool
 from app.viktor_tools.table_tool import generate_table, show_hide_table_tool
+from app.sap_tools.get_support_coordinates_tool import get_support_coordinates_tool
+from app.sap_tools.get_reaction_loads_tool import get_reaction_loads_tool
 
 
 # Friendly display names for tools in chat
@@ -27,6 +29,8 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "show_hide_table": "Show/Hide Table",
     "create_dummy_workflow_node": "Create Workflow Node",
     "compose_workflow_graph": "Compose Workflow Graph",
+    "get_support_coordinates": "Get Support Coordinates (SAP2000)",
+    "get_reaction_loads": "Get Reaction Loads (SAP2000)",
 }
 
 
@@ -239,4 +243,6 @@ def get_tools() -> list[Any]:
         generate_table(),
         show_hide_plot_tool(),
         show_hide_table_tool(),
+        get_support_coordinates_tool(),
+        get_reaction_loads_tool(),
     ]
