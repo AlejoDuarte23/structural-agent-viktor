@@ -3,25 +3,21 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, Json
 
-from app.viktor_tools.wind_loads_tool import calculate_wind_loads_tool
-from app.viktor_tools.geometry_tool import generate_geometry_tool
-from app.viktor_tools.structural_analysis_tool import calculate_structural_analysis_tool
-from app.viktor_tools.sensitivity_analysis_tool import (
-    calculate_sensitivity_analysis_tool,
-)
 from app.viktor_tools.footing_design_tool import calculate_footing_design_tool
 from app.viktor_tools.plotting_tool import generate_plot, show_hide_plot_tool
 from app.viktor_tools.table_tool import generate_table, show_hide_table_tool
 from app.sap_tools.get_support_coordinates_tool import get_support_coordinates_tool
 from app.sap_tools.get_reaction_loads_tool import get_reaction_loads_tool
+from app.sap_tools.display_support_coords_table import (
+    display_support_coordinates_table_tool,
+)
+from app.sap_tools.display_reaction_loads_table import (
+    display_reaction_loads_table_tool,
+)
 
 
 # Friendly display names for tools in chat
 TOOL_DISPLAY_NAMES: dict[str, str] = {
-    "generate_geometry": "Generate Geometry",
-    "calculate_wind_loads": "Calculate Wind Loads",
-    "calculate_structural_analysis": "Calculate Structural Analysis",
-    "calculate_sensitivity_analysis": "Calculate Sensitivity Analysis",
     "calculate_footing_design": "Calculate Footing Design",
     "generate_plotly": "Generate Plot",
     "generate_table": "Generate Table",
@@ -31,6 +27,8 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "compose_workflow_graph": "Compose Workflow Graph",
     "get_support_coordinates": "Get Support Coordinates (SAP2000)",
     "get_reaction_loads": "Get Reaction Loads (SAP2000)",
+    "display_support_coordinates_table": "Display Support Coordinates",
+    "display_reaction_loads_table": "Display Reaction Loads",
 }
 
 
@@ -73,12 +71,8 @@ class FootingDesign(BaseModel):
 class DummyWorkflowNode(BaseModel):
     node_id: str = Field(..., description="Unique id for this workflow node")
     node_type: Literal[
-        "geometry_generation",
-        "windload_analysis",
-        "structural_analysis",
-        "footing_capacity",
+        "sap2000_extraction",
         "footing_design",
-        "sensitivity_analysis",
         "plot_output",
         "table_output",
     ] = Field(..., description="Type of workflow node to add to the graph")
@@ -234,15 +228,13 @@ def get_tools() -> list[Any]:
     return [
         create_dummy_workflow_node_tool(),
         compose_workflow_graph_tool(),
-        calculate_wind_loads_tool(),
-        generate_geometry_tool(),
-        calculate_structural_analysis_tool(),
-        calculate_sensitivity_analysis_tool(),
+        get_support_coordinates_tool(),
+        get_reaction_loads_tool(),
+        display_support_coordinates_table_tool(),
+        display_reaction_loads_table_tool(),
         calculate_footing_design_tool(),
         generate_plot(),
         generate_table(),
         show_hide_plot_tool(),
         show_hide_table_tool(),
-        get_support_coordinates_tool(),
-        get_reaction_loads_tool(),
     ]

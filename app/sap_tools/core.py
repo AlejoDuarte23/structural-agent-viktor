@@ -116,12 +116,21 @@ def get_all_load_cases(SapModel) -> List[str]:
 
 # -------------------- Geometry + supports --------------------
 def get_point_coords(SapModel, point_name: str) -> Tuple[float, float, float]:
-   # Pass initial values for x, y, z (they'll be overwritten by the method)
-   # CSys defaults to "Global" if not specified
-   x, y, z, ret = SapModel.PointObj.GetCoordCartesian(point_name, 0, 0, 0)
+   # GetCoordCartesian returns (Z, X, Y, ret) based on observed behavior
+   # The coordinate order is rotated from what we'd expect
+   result = SapModel.PointObj.GetCoordCartesian(point_name, 0, 0, 0)
+
+   if not isinstance(result, tuple) or len(result) != 4:
+       raise RuntimeError(f"GetCoordCartesian returned unexpected format: {result}")
+
+   # Unpack: API returns (z, x, y, ret) - coordinates are rotated!
+   z_sap, x_sap, y_sap, ret = result
+
    if ret != 0:
        raise RuntimeError(f"GetCoordCartesian({point_name}) failed (ret={ret})")
-   return float(x), float(y), float(z)
+
+   # Return in correct order: (x, y, z)
+   return float(x_sap), float(y_sap), float(z_sap)
 
 def get_point_restraint(SapModel, point_name: str) -> List[int]:
    """

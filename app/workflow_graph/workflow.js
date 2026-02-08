@@ -17,38 +17,24 @@ export class WorkflowGraph {
 
     // Pastel colors and custom icons for each node type
     this.typeStyles = {
-      geometry_generation: { 
+      sap2000_extraction: {
         bg: "#B8D4F1",
         icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-          <line x1="12" y1="22.08" x2="12" y2="12"></line>
+          <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
+          <polyline points="7.5 19.79 12 17.19 16.5 19.79"></polyline>
+          <line x1="12" y1="12" x2="12" y2="17.19"></line>
+          <line x1="12" y1="6.81" x2="12" y2="12"></line>
         </svg>`
       },
-      windload_analysis: { 
+      footing_design: {
         bg: "#C5E8B7",
         icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path>
-        </svg>`
-      },
-      structural_analysis: { 
-        bg: "#FFB3BA",
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-          <line x1="9" y1="22" x2="9" y2="2"></line>
-          <line x1="15" y1="22" x2="15" y2="2"></line>
-          <line x1="4" y1="8" x2="20" y2="8"></line>
-          <line x1="4" y1="14" x2="20" y2="14"></line>
-        </svg>`
-      },
-      sensitivity_analysis: { 
-        bg: "#B5EAD7",
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="20" x2="18" y2="10"></line>
-          <line x1="12" y1="20" x2="12" y2="4"></line>
-          <line x1="6" y1="20" x2="6" y2="14"></line>
-          <polyline points="3 17 9 11 13 15 21 7"></polyline>
-          <polyline points="17 7 21 7 21 11"></polyline>
+          <rect x="3" y="18" width="18" height="4"></rect>
+          <rect x="7" y="10" width="10" height="8"></rect>
+          <line x1="3" y1="18" x2="21" y2="18"></line>
+          <line x1="9" y1="10" x2="9" y2="2"></line>
+          <line x1="15" y1="10" x2="15" y2="2"></line>
         </svg>`
       },
       plot_output: { 
