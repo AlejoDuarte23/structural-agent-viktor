@@ -127,6 +127,7 @@ def workflow_agent_sync_stream(
                - calculate_wind_loads: Perform wind load analysis
                - calculate_structural_analysis: Perform structural analysis on bridges
                - calculate_sensitivity_analysis: Run sensitivity analysis on bridge height
+               - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10
                These tools call real VIKTOR applications and return actual engineering results.
             
             3. VISUALIZE DATA: Use visualization tools to display results
@@ -153,14 +154,21 @@ def workflow_agent_sync_stream(
               URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
               Parameters: bridge_length, bridge_width, n_divisions, cross_section, load_q, wind_pressure, min_height, max_height, n_steps
             
+            - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10 standards
+              URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
+              Parameters: node_names, node_x_coords_mm, node_y_coords_mm, axial_loads_kN, moments_mx_kNm, moments_my_kNm,
+                          fc_mpa (concrete strength), fy_mpa (steel yield), gamma_fill_kNm3 (fill unit weight),
+                          gamma_soil_kNm3, phi_deg (soil friction angle), bearing_depths_m, bearing_capacities_kPa
+              Performs two-way shear (punching), one-way shear (beam action), and bearing capacity checks.
+              Iterates to find optimal (minimum weight) footing and pedestal dimensions.
+            
             Available Agent Tools (local visualization, not VIKTOR apps):
             - generate_plotly: Generate bar plots for data visualization
               Parameters: x (list of floats), y (list of floats)
               Creates a Plotly bar chart displayed in the Plot view panel
             
             IMPORTANT: When creating workflow nodes, include the corresponding URL from above.
-            For node types without explicit tool URLs (footing_design),
-            use the default URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
+            For footing_design nodes, use: https://beta.viktor.ai/workspaces/4796/app/editor/2577
             
             Available workflow node types (for visualization with URLs):
             - geometry_generation: Define bridge geometry (bridge_length, bridge_width, bridge_height, n_divisions, cross_section)
@@ -171,6 +179,8 @@ def workflow_agent_sync_stream(
               → Use URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
             - sensitivity_analysis: Sensitivity analysis varying bridge height
               → Use URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
+            - footing_design: Concrete footing design per ACI 318/NSR-10 (pedestal, slab, bearing checks)
+              → Use URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
             
             OUTPUT NODE TYPES (local visualization tools, NO URL - displayed with dashed border):
             - plot_output: Bar chart visualization of results
@@ -193,8 +203,9 @@ def workflow_agent_sync_stream(
             2. WindloadAnalysis depends on geometry_generation
             3. StructuralAnalysis depends on geometry_generation and wind load analysis
             4. SensitivityAnalysis depends on geometry_generation and wind load analysis and structural analysis for exploratory purpose
-            5. PlotOutput depends on sensitivity_analysis ONLY (max 1 per workflow)
-            6. TableOutput can depend on any node (Can be added in multiple nodes. But user can visualize just one output at the time be propositive add it in at least two node)
+            5. FootingDesign depends on structural_analysis (uses reaction loads from structural analysis)
+            6. PlotOutput depends on sensitivity_analysis ONLY (max 1 per workflow)
+            7. TableOutput can depend on any node (Can be added in multiple nodes. But user can visualize just one output at the time be propositive add it in at least two node)
             
             When composing a workflow, use the compose_workflow_graph tool with all nodes
             defined together. Set proper depends_on relationships between nodes.
