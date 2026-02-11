@@ -1,6 +1,13 @@
 {
   "nodes": [
     {
+      "id": "load_combos",
+      "title": "Get Load Combinations",
+      "type": "sap2000_load_combos",
+      "url": null,
+      "depends_on": []
+    },
+    {
       "id": "sap_extract",
       "title": "SAP2000 Data Extraction",
       "type": "sap2000_extraction",
@@ -11,8 +18,12 @@
       "id": "footing_design",
       "title": "Footing Design",
       "type": "footing_design",
-      "url": "https://beta.viktor.ai/workspaces/4796/app/editor/2577",
+      "url": "https://beta.viktor.ai/workspaces/4800/app/editor/2581",
       "depends_on": [
+        {
+          "node_id": "load_combos",
+          "kind": "default"
+        },
         {
           "node_id": "sap_extract",
           "kind": "default"

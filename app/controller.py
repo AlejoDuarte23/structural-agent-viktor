@@ -120,6 +120,11 @@ def workflow_agent_sync_stream(
             1. SAP2000 DATA EXTRACTION
                Connect to SAP2000 via COM interface and extract model data:
 
+               - get_load_combinations: List all available load combinations and cases
+                 * Returns: Names of load combos (e.g., 'ULS2', 'ULS3', 'SLS1')
+                 * Use this FIRST to see what combos are available
+                 * Helps decide which combos to use for design
+
                - get_support_coordinates: Extract support node coordinates and restraints
                  * Returns: Joint name, X/Y/Z coordinates (m), restraint conditions (U1-U3, R1-R3)
                  * Data stored in Viktor Storage under key: "model_support_coordinates"
@@ -130,6 +135,11 @@ def workflow_agent_sync_stream(
 
                IMPORTANT: SAP2000 must be running with a model open and configured as active API instance
                (Tools → Set as active instance for API in SAP2000).
+
+               TYPICAL WORKFLOW:
+               1. get_load_combinations → See available combos
+               2. get_support_coordinates → Extract node positions
+               3. get_reaction_loads → Extract forces/moments
 
             2. DATA DISPLAY
                Transform extracted SAP2000 data into table views:
@@ -151,12 +161,20 @@ def workflow_agent_sync_stream(
                User: "Show them in a table"
                → Call display_support_coordinates_table
 
-            3. FOOTING DESIGN (Future Integration)
+            3. FOOTING DESIGN (Integrated with SAP2000)
                - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10
-                 * URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
+                 * URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
+                 * Automatically loads node coordinates and reaction loads from SAP2000 storage
+                 * REQUIRES: get_support_coordinates and get_reaction_loads must be run first
                  * Performs punching shear, beam shear, and bearing capacity checks
-                 * Finds optimal pedestal and footing dimensions
-                 * Currently uses manual input; SAP2000 integration coming soon
+                 * Finds optimal pedestal and footing dimensions for each support node
+                 * User provides: material properties (fc, fy) and soil properties (bearing capacity, phi)
+
+                 LOAD COMBINATION SELECTION:
+                 * Use 'load_combinations_to_check' to specify which combos to consider (e.g., ['ULS2', 'ULS3'])
+                   Tool selects governing combo from this list per node based on max F3
+                 * Or use 'governing_load_combo' to force one combo for ALL nodes (e.g., 'ULS3')
+                 * If neither specified, automatically checks all combos and selects max F3 per node
 
             4. VISUALIZATION TOOLS
                - generate_plotly: Create line/bar plots from x and y data
@@ -165,8 +183,25 @@ def workflow_agent_sync_stream(
                - generate_table: Create custom tables with data and column headers
                  * Must call show_hide_table with action="show" after to display
 
+               - generate_footings_plot: Create plan view visualization of footing designs
+                 * AUTOMATIC WORKFLOW (Recommended):
+                   → Just call with {} (empty parameters) - no manual data entry needed!
+                   → Auto-loads design results from calculate_footing_design storage
+                   → Auto-loads node coordinates from get_support_coordinates storage
+                   → Automatically merges data and creates plot
+                 * VISUAL OUTPUT:
+                   → Footings shown as light gray rectangles with dimensions
+                   → Pedestals shown as dark gray rectangles
+                   → Node labels and hover info with weights, governing combos
+                   → Equal aspect ratio for accurate geometric representation
+                 * PREREQUISITES:
+                   → get_support_coordinates (for node x,y positions)
+                   → calculate_footing_design (for design dimensions)
+                 * Must call show_hide_footings_plot with action="show" after to display
+
                - show_hide_plot: Control Plot view panel visibility
                - show_hide_table: Control Table view panel visibility
+               - show_hide_footings_plot: Control Footings Plot view panel visibility
 
             5. WORKFLOW GRAPHS (Optional)
                Create visual workflow diagrams to document engineering processes:
@@ -175,11 +210,15 @@ def workflow_agent_sync_stream(
                - compose_workflow_graph: Combine nodes into DAG visualization
 
                Available node types for workflows:
+               - sap2000_load_combos: Get available load combinations (no URL - SAP2000 query)
                - sap2000_extraction: SAP2000 data extraction step (no URL - represents extraction process)
                - footing_design: Footing design per ACI 318/NSR-10
-                 → URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
-               - plot_output: Visualization node (no URL)
+                 → URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
+                 → Typically depends on: sap2000_load_combos, sap2000_extraction
+               - plot_output: Generic visualization node (no URL)
                - table_output: Table display node (no URL)
+               - footings_plot_output: Footing plan view visualization node (no URL)
+                 → Typically depends on: footing_design
 
             GENERAL APPROACH:
             - Extract data from SAP2000 when requested
@@ -279,6 +318,26 @@ def get_table_visibility(params, **kwargs):
     try:
         out_bool = vkt.Storage().get("show_table", scope="entity").getvalue()
         print(f"{out_bool=}")
+        if out_bool == "show":
+            return True
+        return False
+    except Exception:
+        # If there is no data, then view is hidden.
+        return False
+
+
+def get_footings_plot_visibility(params, **kwargs):
+    if not params.chat:
+        entities = vkt.Storage().list(scope="entity")
+        for entity in entities:
+            if entity == "show_footings_plot":
+                vkt.Storage().delete("show_footings_plot", scope="entity")
+            if entity == "PlotFootingsTool":
+                vkt.Storage().delete("PlotFootingsTool", scope="entity")
+
+    try:
+        out_bool = vkt.Storage().get("show_footings_plot", scope="entity").getvalue()
+        print(f"footings_plot {out_bool=}")
         if out_bool == "show":
             return True
         return False
@@ -433,3 +492,171 @@ class Controller(vkt.Controller):
         except Exception as e:
             logger.exception(f"Error in table_view: {e}")
             return vkt.TableResult([["Error", "using Tool"]])
+
+    @vkt.PlotlyView("Footings Plot", width=100, visible=get_footings_plot_visibility)
+    def footings_plot_view(self, params, **kwargs) -> vkt.PlotlyResult:
+        if not params.chat:
+            try:
+                vkt.Storage().delete("PlotFootingsTool", scope="entity")
+            except Exception:
+                pass
+        try:
+            from app.viktor_tools.plot_footings_tool import PlotFootingsInput
+
+            raw = (
+                vkt.Storage()
+                .get("PlotFootingsTool", scope="entity")
+                .getvalue_binary()
+                .decode("utf-8")
+            )
+            logger.info(f"Footings plot raw data: {raw}")
+            tool_input = PlotFootingsInput.model_validate_json(raw)
+            logger.info(f"Footings plot tool_input: {tool_input}")
+
+            # Create Plotly figure
+            fig = go.Figure()
+
+            # Colors
+            footing_color = "rgba(180, 180, 180, 0.6)"
+            pedestal_color = "rgba(100, 100, 100, 0.8)"
+
+            # Track bounds for layout
+            all_x = []
+            all_y = []
+
+            for footing in tool_input.footings:
+                # Skip nodes with missing coordinates
+                if footing.x is None or footing.y is None:
+                    logger.warning(
+                        f"Skipping node {footing.node_name} - missing coordinates"
+                    )
+                    continue
+
+                cx = footing.x
+                cy = footing.y
+                node_name = footing.node_name
+
+                if footing.B is not None and footing.L is not None:
+                    # Node has design - draw footing and pedestal
+                    B = footing.B
+                    L = footing.L
+                    h = footing.h or 0.0
+                    ped = footing.pedestal_size or 0.0
+                    ped_h = footing.pedestal_height or 0.0
+
+                    # Draw footing rectangle
+                    x0, x1 = cx - B / 2, cx + B / 2
+                    y0, y1 = cy - L / 2, cy + L / 2
+                    hover_text = f"{node_name}<br>Footing: {B:.2f}m × {L:.2f}m<br>Thickness: {h * 1000:.0f}mm"
+                    if footing.pedestal_height is not None:
+                        hover_text += f"<br>Depth: {(ped_h + h) * 1000:.0f}mm"
+                    if footing.total_weight is not None:
+                        hover_text += f"<br>Weight: {footing.total_weight:.1f}kN"
+                    if footing.governing_combo:
+                        hover_text += f"<br>Combo: {footing.governing_combo}"
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[x0, x1, x1, x0, x0],
+                            y=[y0, y0, y1, y1, y0],
+                            mode="lines",
+                            fill="toself",
+                            fillcolor=footing_color,
+                            line=dict(color="rgba(100,100,100,1)", width=2),
+                            name=f"{node_name} Footing",
+                            hoverinfo="text",
+                            text=hover_text,
+                            showlegend=False,
+                        )
+                    )
+
+                    # Draw pedestal rectangle if exists
+                    if ped > 0:
+                        px0, px1 = cx - ped / 2, cx + ped / 2
+                        py0, py1 = cy - ped / 2, cy + ped / 2
+                        ped_hover = f"{node_name}<br>Pedestal: {ped * 1000:.0f}mm × {ped * 1000:.0f}mm<br>Height: {ped_h * 1000:.0f}mm"
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[px0, px1, px1, px0, px0],
+                                y=[py0, py0, py1, py1, py0],
+                                mode="lines",
+                                fill="toself",
+                                fillcolor=pedestal_color,
+                                line=dict(color="rgba(50,50,50,1)", width=2),
+                                name=f"{node_name} Pedestal",
+                                hoverinfo="text",
+                                text=ped_hover,
+                                showlegend=False,
+                            )
+                        )
+
+                    # Add node label
+                    fig.add_annotation(
+                        x=cx,
+                        y=cy,
+                        text=f"<b>{node_name}</b>",
+                        showarrow=False,
+                        font=dict(size=11, color="white"),
+                        bgcolor="rgba(50,50,50,0.7)",
+                        borderpad=4,
+                    )
+
+                    all_x.extend([x0, x1])
+                    all_y.extend([y0, y1])
+                else:
+                    # Node without design - just mark position
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[cx],
+                            y=[cy],
+                            mode="markers+text",
+                            marker=dict(size=12, color="red", symbol="x"),
+                            text=[node_name],
+                            textposition="top center",
+                            name=f"{node_name} (No design)",
+                            showlegend=False,
+                        )
+                    )
+                    all_x.append(cx)
+                    all_y.append(cy)
+
+            # Calculate plot bounds
+            if all_x and all_y:
+                margin = 2.0
+                x_range = [min(all_x) - margin, max(all_x) + margin]
+                y_range = [min(all_y) - margin, max(all_y) + margin]
+            else:
+                x_range = [-5, 20]
+                y_range = [-5, 20]
+
+            # Layout
+            fig.update_layout(
+                title=tool_input.title,
+                xaxis=dict(
+                    title="X (m)",
+                    scaleanchor="y",
+                    scaleratio=1,
+                    range=x_range,
+                    showgrid=True,
+                    gridcolor="rgba(200, 200, 200, 0.3)",
+                    griddash="dash",
+                ),
+                yaxis=dict(
+                    title="Y (m)",
+                    range=y_range,
+                    showgrid=True,
+                    gridcolor="rgba(200, 200, 200, 0.3)",
+                    griddash="dash",
+                ),
+                plot_bgcolor="white",
+                margin=dict(l=60, r=60, t=60, b=60),
+            )
+
+            return vkt.PlotlyResult(fig.to_json())
+
+        except Exception as e:
+            logger.exception(f"Error in footings_plot_view: {e}")
+            # Return empty figure on error
+            fig = go.Figure()
+            fig.update_layout(title="Error loading footings plot")
+            return vkt.PlotlyResult(fig.to_json())

@@ -6,8 +6,13 @@ from pydantic import BaseModel, Field, Json
 from app.viktor_tools.footing_design_tool import calculate_footing_design_tool
 from app.viktor_tools.plotting_tool import generate_plot, show_hide_plot_tool
 from app.viktor_tools.table_tool import generate_table, show_hide_table_tool
+from app.viktor_tools.plot_footings_tool import (
+    generate_footings_plot_tool,
+    show_hide_footings_plot_tool,
+)
 from app.sap_tools.get_support_coordinates_tool import get_support_coordinates_tool
 from app.sap_tools.get_reaction_loads_tool import get_reaction_loads_tool
+from app.sap_tools.get_load_combinations_tool import get_load_combinations_tool
 from app.sap_tools.display_support_coords_table import (
     display_support_coordinates_table_tool,
 )
@@ -23,10 +28,13 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "generate_table": "Generate Table",
     "show_hide_plot": "Show/Hide Plot",
     "show_hide_table": "Show/Hide Table",
+    "generate_footings_plot": "Generate Footings Plot",
+    "show_hide_footings_plot": "Show/Hide Footings Plot",
     "create_dummy_workflow_node": "Create Workflow Node",
     "compose_workflow_graph": "Compose Workflow Graph",
     "get_support_coordinates": "Get Support Coordinates (SAP2000)",
     "get_reaction_loads": "Get Reaction Loads (SAP2000)",
+    "get_load_combinations": "Get Load Combinations (SAP2000)",
     "display_support_coordinates_table": "Display Support Coordinates",
     "display_reaction_loads_table": "Display Reaction Loads",
 }
@@ -71,15 +79,17 @@ class FootingDesign(BaseModel):
 class DummyWorkflowNode(BaseModel):
     node_id: str = Field(..., description="Unique id for this workflow node")
     node_type: Literal[
+        "sap2000_load_combos",
         "sap2000_extraction",
         "footing_design",
         "plot_output",
         "table_output",
+        "footings_plot_output",
     ] = Field(..., description="Type of workflow node to add to the graph")
     label: str = Field(..., description="Human-readable label for the node")
     url: str | None = Field(
         default=None,
-        description="URL to the VIKTOR app tool. Leave empty/null for output nodes (plot_output, table_output) as they are local visualization tools without URLs.",
+        description="URL to the VIKTOR app tool. Leave empty/null for output nodes (plot_output, table_output, footings_plot_output) as they are local visualization tools without URLs.",
     )
     inputs: Json[Any] = Field(
         default="{}",
@@ -171,7 +181,7 @@ async def compose_workflow_graph_func(ctx: Any, args: str) -> str:
 
     # Default fallback URL (not applied to output nodes)
     default_url = "https://beta.viktor.ai/workspaces/4672/app/editor/2394"
-    output_node_types = {"plot_output", "table_output"}
+    output_node_types = {"plot_output", "table_output", "footings_plot_output"}
 
     workflow = Workflow(
         nodes=[
@@ -230,6 +240,7 @@ def get_tools() -> list[Any]:
         compose_workflow_graph_tool(),
         get_support_coordinates_tool(),
         get_reaction_loads_tool(),
+        get_load_combinations_tool(),
         display_support_coordinates_table_tool(),
         display_reaction_loads_table_tool(),
         calculate_footing_design_tool(),
@@ -237,4 +248,6 @@ def get_tools() -> list[Any]:
         generate_table(),
         show_hide_plot_tool(),
         show_hide_table_tool(),
+        generate_footings_plot_tool(),
+        show_hide_footings_plot_tool(),
     ]

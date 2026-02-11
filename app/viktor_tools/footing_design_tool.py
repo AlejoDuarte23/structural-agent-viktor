@@ -118,9 +118,9 @@ class SectionBearing(BaseModel):
 class SectionFooting(BaseModel):
     """Section: Footing Dimensions (initial values for iteration)."""
 
-    b: float = Field(default=1.0, description="Initial footing width (m)")
-    l: float = Field(default=1.0, description="Initial footing length (m)")
-    h: float = Field(default=0.3, description="Initial slab thickness (m)")
+    b: float = Field(default=1.5, description="Initial footing width (m)")
+    l: float = Field(default=1.5, description="Initial footing length (m)")
+    h: float = Field(default=0.4, description="Initial slab thickness (m)")
     d: float = Field(
         default=0.210, description="Effective depth (m), typically h - 90mm cover"
     )
@@ -220,8 +220,8 @@ class FootingDesignTool(ViktorTool):
     def __init__(
         self,
         footing_input: FootingDesignInput,
-        workspace_id: int = 4796,
-        entity_id: int = 2577,
+        workspace_id: int = 4800,
+        entity_id: int = 2581,
         method_name: str = "download_design_results",
     ):
         super().__init__(workspace_id, entity_id)
@@ -314,35 +314,7 @@ class FootingDesignTool(ViktorTool):
 
 
 class FootingDesignFlatInput(BaseModel):
-    """Flat input parameters for footing design - easier for agent to use."""
-
-    # Node coordinates (simplified - single node for basic usage)
-    node_names: list[str] = Field(
-        default=["N1", "N2"],
-        description="List of node names to analyze",
-    )
-    node_x_coords_m: list[float] = Field(
-        default=[0.0, 5.0],
-        description="X coordinates for each node in meters",
-    )
-    node_y_coords_m: list[float] = Field(
-        default=[0.0, 0.0],
-        description="Y coordinates for each node in meters",
-    )
-
-    # Axial loads per node (simplified - using maximum load for design)
-    axial_loads_kN: list[float] = Field(
-        default=[-15.0, -20.0],
-        description="Axial load Fz for each node in kN (negative = compression)",
-    )
-    moments_mx_kNm: list[float] = Field(
-        default=[10.0, 15.0],
-        description="Moment Mx for each node in kN·m",
-    )
-    moments_my_kNm: list[float] = Field(
-        default=[8.0, 12.0],
-        description="Moment My for each node in kN·m",
-    )
+    """Simplified input - node coords and loads auto-loaded from SAP2000 storage."""
 
     # Material properties
     fc_mpa: float = Field(
@@ -368,7 +340,7 @@ class FootingDesignFlatInput(BaseModel):
         description="Soil friction angle in degrees",
     )
 
-    # Bearing capacity (simplified - single value or depth-dependent)
+    # Bearing capacity
     bearing_depths_m: list[float] = Field(
         default=[1.0, 1.5, 2.0],
         description="Depths for bearing capacity interpolation in meters",
@@ -378,86 +350,197 @@ class FootingDesignFlatInput(BaseModel):
         description="Allowable bearing capacities at each depth in kPa",
     )
 
+    # Load combo selection (optional)
+    load_combinations_to_check: list[str] | None = Field(
+        default=None,
+        description="List of load combinations to check (e.g., ['ULS2', 'ULS3', 'SLS1']). "
+                    "If None, uses all available combinations. "
+                    "The tool will select the governing combo from this list per node based on max F3.",
+    )
+    governing_load_combo: str | None = Field(
+        default=None,
+        description="DEPRECATED: Use load_combinations_to_check instead. "
+                    "Specific load combo to force for all nodes (e.g., 'ULS3'). "
+                    "If specified, overrides load_combinations_to_check.",
+    )
+
 
 async def calculate_footing_design_func(ctx: Any, args: str) -> str:
-    """Async function to invoke the footing design tool."""
-    raw_input = json.loads(args)
+    """Auto-loads SAP2000 data from storage and runs footing design."""
+    flat_input = FootingDesignFlatInput.model_validate_json(args)
 
-    # Build structured input from flat parameters
-    node_names = raw_input.get("node_names", ["N1", "N2"])
-    node_x = raw_input.get("node_x_coords_m", [0.0, 5.0])
-    node_y = raw_input.get("node_y_coords_m", [0.0, 0.0])
-    axial_loads = raw_input.get("axial_loads_kN", [-15.0, -20.0])
-    moments_mx = raw_input.get("moments_mx_kNm", [10.0, 15.0])
-    moments_my = raw_input.get("moments_my_kNm", [8.0, 12.0])
+    # Step 1: Load SAP2000 data from Viktor Storage
+    try:
+        import viktor as vkt
 
-    # Build node coordinates (already in meters)
+        # Get support coordinates
+        coords_file = vkt.Storage().get("model_support_coordinates", scope="entity")
+        if not coords_file:
+            return (
+                "❌ SAP2000 support coordinates not found in storage.\n"
+                "Please run these tools first:\n"
+                "1. get_support_coordinates (extracts node positions from SAP2000)\n"
+                "2. get_reaction_loads (extracts forces/moments from SAP2000)\n"
+                "Then retry footing design."
+            )
+
+        # Get reaction loads
+        reactions_file = vkt.Storage().get("model_reaction_loads", scope="entity")
+        if not reactions_file:
+            return (
+                "❌ SAP2000 reaction loads not found in storage.\n"
+                "Please run these tools first:\n"
+                "1. get_support_coordinates (extracts node positions from SAP2000)\n"
+                "2. get_reaction_loads (extracts forces/moments from SAP2000)\n"
+                "Then retry footing design."
+            )
+
+        # Parse JSON data from storage
+        support_coords = json.loads(coords_file.getvalue_binary().decode("utf-8"))
+        reaction_loads = json.loads(reactions_file.getvalue_binary().decode("utf-8"))
+
+        logger.info(
+            f"Loaded SAP2000 data: {len(support_coords)} support nodes, "
+            f"{len(reaction_loads)} nodes with reactions"
+        )
+
+    except ImportError:
+        return "❌ Viktor module not available - cannot access storage."
+    except json.JSONDecodeError as e:
+        logger.exception("Failed to parse SAP2000 storage data")
+        return f"❌ Error parsing SAP2000 data from storage: {e}"
+    except Exception as e:
+        logger.exception("Unexpected error loading SAP2000 data")
+        return f"❌ Error loading SAP2000 data from storage: {e}"
+
+    # Step 2: Build node coordinates from support data
     node_coords = []
-    for i, name in enumerate(node_names):
+    for support in support_coords:
         node_coords.append(
             NodeCoordinate(
-                node_name=name,
-                x=node_x[i] if i < len(node_x) else 0.0,
-                y=node_y[i] if i < len(node_y) else 0.0,
-                z=0.0,
+                node_name=support["Joint"],
+                x=support["X"],
+                y=support["Y"],
+                z=support["Z"],
             )
         )
 
-    # Build node reactions (one load combo per node for simplicity)
+    # Step 3: Build node reactions - select governing combo for each node
     node_reactions = []
-    for i, name in enumerate(node_names):
+    governing_combos_used = {}
+
+    for support in support_coords:
+        node_name = support["Joint"]
+
+        # Check if reaction data exists for this node
+        if node_name not in reaction_loads:
+            return (
+                f"❌ No reaction data found for support node '{node_name}'.\n"
+                "Please ensure get_reaction_loads extracted all support nodes."
+            )
+
+        node_combos = reaction_loads[node_name]
+
+        # Determine which combos to consider
+        if flat_input.governing_load_combo:
+            # Legacy: Force specific combo for all nodes
+            if flat_input.governing_load_combo not in node_combos:
+                available = list(node_combos.keys())
+                return (
+                    f"❌ Load combination '{flat_input.governing_load_combo}' not found for node '{node_name}'.\n"
+                    f"Available combinations: {', '.join(available)}"
+                )
+            selected_combo = flat_input.governing_load_combo
+        elif flat_input.load_combinations_to_check:
+            # Filter to specified combos only
+            combos_to_check = {
+                c: node_combos[c]
+                for c in flat_input.load_combinations_to_check
+                if c in node_combos
+            }
+            if not combos_to_check:
+                available = list(node_combos.keys())
+                return (
+                    f"❌ None of the specified load combinations {flat_input.load_combinations_to_check} "
+                    f"found for node '{node_name}'.\n"
+                    f"Available combinations: {', '.join(available)}"
+                )
+            # Select combo with max F3 from filtered list
+            selected_combo = max(
+                combos_to_check.keys(), key=lambda c: abs(combos_to_check[c]["F3"])
+            )
+        else:
+            # Auto-select from all available combos: max absolute F3
+            selected_combo = max(
+                node_combos.keys(), key=lambda c: abs(node_combos[c]["F3"])
+            )
+
+        reaction = node_combos[selected_combo]
+        governing_combos_used[node_name] = selected_combo
+
         node_reactions.append(
             NodeReaction(
-                node_name=name,
-                load_combo="LC1",
-                F1=0.0,
-                F2=0.0,
-                F3=axial_loads[i] if i < len(axial_loads) else -15.0,
-                M1=moments_mx[i] if i < len(moments_mx) else 10.0,
-                M2=moments_my[i] if i < len(moments_my) else 8.0,
-                M3=0.0,
+                node_name=node_name,
+                load_combo=selected_combo,
+                F1=reaction["F1"],
+                F2=reaction["F2"],
+                F3=reaction["F3"],
+                M1=reaction["M1"],
+                M2=reaction["M2"],
+                M3=reaction["M3"],
             )
         )
 
-    # Build bearing capacity table
-    bearing_depths = raw_input.get("bearing_depths_m", [1.0, 1.5, 2.0])
-    bearing_caps = raw_input.get("bearing_capacities_kPa", [100.0, 150.0, 250.0])
+    logger.info(f"Selected governing combos: {governing_combos_used}")
+
+    # Step 4: Build bearing capacity table
     bearing_table = []
-    for i, depth in enumerate(bearing_depths):
+    for depth, capacity in zip(
+        flat_input.bearing_depths_m, flat_input.bearing_capacities_kPa
+    ):
         bearing_table.append(
-            BearingCapacityEntry(
-                depth=depth,
-                bearing_capacity=bearing_caps[i] if i < len(bearing_caps) else 100.0,
-            )
+            BearingCapacityEntry(depth=depth, bearing_capacity=capacity)
         )
 
-    # Create structured input
+    # Step 5: Create complete footing input
     footing_input = FootingDesignInput(
         section_node_coords=SectionNodeCoords(node_coords=node_coords),
         section_node_reactions=SectionNodeReactions(node_reactions=node_reactions),
         section_materials=SectionMaterials(
-            fc=raw_input.get("fc_mpa", 28),
-            fy=raw_input.get("fy_mpa", 420),
-            gamma_fill=raw_input.get("gamma_fill_kNm3", 19.5),
+            fc=flat_input.fc_mpa,
+            fy=flat_input.fy_mpa,
+            gamma_fill=flat_input.gamma_fill_kNm3,
         ),
         section_soil=SectionSoil(
-            gamma_soil=raw_input.get("gamma_soil_kNm3", 20),
-            phi=raw_input.get("phi_deg", 25),
+            gamma_soil=flat_input.gamma_soil_kNm3,
+            phi=flat_input.phi_deg,
         ),
         section_bearing=SectionBearing(bearing_table=bearing_table),
         section_footing=SectionFooting(),
         section_pedestal=SectionPedestal(),
     )
 
-    # Run the tool
+    # Step 6: Run footing design tool
     tool = FootingDesignTool(footing_input=footing_input)
     result = tool.run_and_parse()
 
-    # Build summary response
+    # Step 6.5: Store full results in Viktor Storage for use by plot tools
+    try:
+        result_data = result.model_dump()
+        vkt.Storage().set(
+            "footing_design_results",
+            data=vkt.File.from_data(json.dumps(result_data, indent=2)),
+            scope="entity",
+        )
+        logger.info(f"Stored footing design results in storage")
+    except Exception as e:
+        logger.warning(f"Failed to store footing design results: {e}")
+
+    # Step 7: Format response
     if result.num_successful == 0:
         return (
             f"Footing design analysis completed for {result.num_nodes} nodes. "
-            "No compliant designs found - consider increasing footing dimensions or bearing capacity."
+            "❌ No compliant designs found - consider increasing footing dimensions or bearing capacity."
         )
 
     # Summarize successful designs
@@ -470,7 +553,6 @@ async def calculate_footing_design_func(ctx: Any, args: str) -> str:
             "area_m2": round(d.footing_area_m2, 2),
             "governing_combo": d.governing_combo,
         }
-        # Add optional fields if available
         if d.total_weight_kN is not None:
             summary["weight_kN"] = round(d.total_weight_kN, 1)
         design_summaries.append(summary)
@@ -483,8 +565,8 @@ async def calculate_footing_design_func(ctx: Any, args: str) -> str:
     }
 
     return (
-        f"Footing design completed successfully. "
-        f"Analyzed {result.num_nodes} nodes, found {result.num_successful} optimal designs. "
+        f"✅ Footing design completed successfully using SAP2000 data. "
+        f"Analyzed {result.num_nodes} support nodes, found {result.num_successful} optimal designs.\n\n"
         f"Results: {json.dumps(result_json, indent=2)}"
     )
 
@@ -496,13 +578,25 @@ def calculate_footing_design_tool() -> Any:
     return FunctionTool(
         name="calculate_footing_design",
         description=(
-            "Design concrete footings according to ACI 318/NSR-10 standards using a Viktor app. "
-            "Performs two-way (punching) shear check, one-way (beam action) shear check, and bearing capacity verification. "
-            "Takes node coordinates, axial loads and moments, material properties (concrete fc, steel fy), "
-            "soil properties, and depth-dependent bearing capacity values. "
-            "Iterates through footing and pedestal dimensions to find the optimal (minimum weight) design "
-            "that satisfies all structural checks for each node. "
-            "URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577"
+            "Design concrete footings according to ACI 318/NSR-10 standards. "
+            "Automatically loads node coordinates and reaction loads from SAP2000 storage data. "
+            "Performs two-way (punching) shear, one-way (beam action) shear, and bearing capacity checks. "
+            "Iterates to find optimal (minimum weight) footing and pedestal dimensions for each support node.\n\n"
+            "PREREQUISITES:\n"
+            "- Must run 'get_support_coordinates' first (extracts node positions from SAP2000)\n"
+            "- Must run 'get_reaction_loads' first (extracts forces/moments from SAP2000)\n"
+            "- Optionally run 'get_load_combinations' to see available load combinations\n"
+            "Tool will return an error if SAP2000 data is not in storage.\n\n"
+            "LOAD COMBINATION SELECTION:\n"
+            "- Use 'load_combinations_to_check' to specify which combos to consider (e.g., ['ULS2', 'ULS3'])\n"
+            "  The tool will select the governing combo from this list per node based on max axial load (F3)\n"
+            "- If 'governing_load_combo' is specified (e.g., 'ULS3'), forces that combo for ALL nodes (legacy)\n"
+            "- If both are None (default), automatically checks all available combos and selects max F3 per node\n\n"
+            "REQUIRED PARAMETERS:\n"
+            "- Material properties: fc_mpa (concrete strength), fy_mpa (steel yield), gamma_fill_kNm3\n"
+            "- Soil properties: gamma_soil_kNm3, phi_deg (friction angle)\n"
+            "- Bearing capacity: bearing_depths_m and bearing_capacities_kPa (for interpolation)\n\n"
+            "URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581"
         ),
         params_json_schema=FootingDesignFlatInput.model_json_schema(),
         on_invoke_tool=calculate_footing_design_func,
