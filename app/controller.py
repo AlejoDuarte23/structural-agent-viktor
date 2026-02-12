@@ -117,7 +117,15 @@ def workflow_agent_sync_stream(
 
             YOUR CAPABILITIES:
 
-            1. SAP2000 DATA EXTRACTION
+            1. SAP2000 CONNECTION CHECK
+               Verify SAP2000 availability before running extractions:
+
+               - check_sap2000_instance: Check if SAP2000 is running and ready
+                 * Returns: Connection status (✓ connected or ✗ failed with troubleshooting)
+                 * Verifies: SAP2000 is running, model is open, API instance is active
+                 * Use this FIRST before any SAP2000 operations to avoid errors
+
+            2. SAP2000 DATA EXTRACTION
                Connect to SAP2000 via COM interface and extract model data:
 
                - get_load_combinations: List all available load combinations and cases
@@ -137,11 +145,12 @@ def workflow_agent_sync_stream(
                (Tools → Set as active instance for API in SAP2000).
 
                TYPICAL WORKFLOW:
+               0. check_sap2000_instance → Verify connection (recommended first step)
                1. get_load_combinations → See available combos
                2. get_support_coordinates → Extract node positions
                3. get_reaction_loads → Extract forces/moments
 
-            2. DATA DISPLAY
+            3. DATA DISPLAY
                Transform extracted SAP2000 data into table views:
 
                - display_support_coordinates_table: Show support nodes in table format
@@ -161,7 +170,7 @@ def workflow_agent_sync_stream(
                User: "Show them in a table"
                → Call display_support_coordinates_table
 
-            3. FOOTING DESIGN (Integrated with SAP2000)
+            4. FOOTING DESIGN (Integrated with SAP2000)
                - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10
                  * URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
                  * Automatically loads node coordinates and reaction loads from SAP2000 storage
@@ -176,7 +185,7 @@ def workflow_agent_sync_stream(
                  * Or use 'governing_load_combo' to force one combo for ALL nodes (e.g., 'ULS3')
                  * If neither specified, automatically checks all combos and selects max F3 per node
 
-            4. VISUALIZATION TOOLS
+            5. VISUALIZATION TOOLS
                - generate_plotly: Create line/bar plots from x and y data
                  * Must call show_hide_plot with action="show" after to display
 
@@ -203,13 +212,14 @@ def workflow_agent_sync_stream(
                - show_hide_table: Control Table view panel visibility
                - show_hide_footings_plot: Control Footings Plot view panel visibility
 
-            5. WORKFLOW GRAPHS (Optional)
+            6. WORKFLOW GRAPHS (Optional)
                Create visual workflow diagrams to document engineering processes:
 
                - create_dummy_workflow_node: Create individual nodes
                - compose_workflow_graph: Combine nodes into DAG visualization
 
                Available node types for workflows:
+               - sap2000_tool: SAP2000 connection check (no URL - connection verification)
                - sap2000_load_combos: Get available load combinations (no URL - SAP2000 query)
                - sap2000_extraction: SAP2000 data extraction step (no URL - represents extraction process)
                - footing_design: Footing design per ACI 318/NSR-10

@@ -268,7 +268,7 @@ def get_joint_reaction_first_row(SapModel, joint_name: str) -> Dict[str, Any]:
        "M3": float(m3[i]),
    }
 
-def get_support_reactions_all_combos(SapModel, *, include_cases: bool = False) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+def get_support_reactions_all_combos(SapModel) -> Tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]]]:
    """
    Returns:
        - List of support nodes with coordinates
@@ -276,11 +276,9 @@ def get_support_reactions_all_combos(SapModel, *, include_cases: bool = False) -
    """
    supports = get_support_nodes(SapModel)
 
-   # Get all load combinations and cases
+   # Get all load combinations
    names: List[str] = []
    names.extend(get_all_load_combos(SapModel))
-   if include_cases:
-       names.extend(get_all_load_cases(SapModel))
 
    # Organize reactions by joint, then by load combo
    reactions_by_joint: Dict[str, Dict[str, Any]] = {}
@@ -319,11 +317,10 @@ def save_json(payload: Dict[str, Any], out_path: str | Path) -> None:
 if __name__ == "__main__":
    COORDS_FILE = "support_nodes_coordinates.json"
    REACTIONS_FILE = "support_reactions_by_node.json"
-   INCLUDE_CASES = False  # set True to include cases also
 
    with Sap2000Session() as sap:
        run_analysis(sap.SapModel)
-       supports, reactions = get_support_reactions_all_combos(sap.SapModel, include_cases=INCLUDE_CASES)
+       supports, reactions = get_support_reactions_all_combos(sap.SapModel)
 
        # Save support coordinates
        save_json(supports, COORDS_FILE)

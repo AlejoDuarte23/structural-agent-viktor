@@ -33,7 +33,7 @@ async def test_reaction_loads():
     print("=" * 60)
 
     # Prepare test arguments
-    args = json.dumps({"run_analysis": False, "include_cases": False})
+    args = json.dumps({"run_analysis": False})
 
     # Call the tool
     result = await get_reaction_loads_func(None, args)

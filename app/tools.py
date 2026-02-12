@@ -10,6 +10,7 @@ from app.viktor_tools.plot_footings_tool import (
     generate_footings_plot_tool,
     show_hide_footings_plot_tool,
 )
+from app.sap_tools.check_sap2000_instance_tool import check_sap2000_instance_tool
 from app.sap_tools.get_support_coordinates_tool import get_support_coordinates_tool
 from app.sap_tools.get_reaction_loads_tool import get_reaction_loads_tool
 from app.sap_tools.get_load_combinations_tool import get_load_combinations_tool
@@ -32,6 +33,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "show_hide_footings_plot": "Show/Hide Footings Plot",
     "create_dummy_workflow_node": "Create Workflow Node",
     "compose_workflow_graph": "Compose Workflow Graph",
+    "check_sap2000_instance": "Check SAP2000 Connection",
     "get_support_coordinates": "Get Support Coordinates (SAP2000)",
     "get_reaction_loads": "Get Reaction Loads (SAP2000)",
     "get_load_combinations": "Get Load Combinations (SAP2000)",
@@ -79,6 +81,7 @@ class FootingDesign(BaseModel):
 class DummyWorkflowNode(BaseModel):
     node_id: str = Field(..., description="Unique id for this workflow node")
     node_type: Literal[
+        "sap2000_tool",
         "sap2000_load_combos",
         "sap2000_extraction",
         "footing_design",
@@ -238,6 +241,7 @@ def get_tools() -> list[Any]:
     return [
         create_dummy_workflow_node_tool(),
         compose_workflow_graph_tool(),
+        check_sap2000_instance_tool(),
         get_support_coordinates_tool(),
         get_reaction_loads_tool(),
         get_load_combinations_tool(),

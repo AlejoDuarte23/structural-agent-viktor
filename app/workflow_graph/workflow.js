@@ -18,22 +18,24 @@ export class WorkflowGraph {
     // Pastel colors and custom icons for each node type
     this.typeStyles = {
       sap2000_load_combos: {
-        bg: "#FFE5B4",
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-          <polyline points="14 2 14 8 20 8"></polyline>
-          <line x1="9" y1="13" x2="15" y2="13"></line>
-          <line x1="9" y1="17" x2="15" y2="17"></line>
+        bg: "#B8D4F1",
+        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" style="width: 40px; height: 40px;">
+          <rect x="2" y="2" width="40" height="40" rx="10" ry="10" fill="#4285f4"/>
+          <text x="22" y="26" fill="white" font-family="system-ui" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="middle">S</text>
         </svg>`
       },
       sap2000_extraction: {
         bg: "#B8D4F1",
-        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-          <polyline points="7.5 4.21 12 6.81 16.5 4.21"></polyline>
-          <polyline points="7.5 19.79 12 17.19 16.5 19.79"></polyline>
-          <line x1="12" y1="12" x2="12" y2="17.19"></line>
-          <line x1="12" y1="6.81" x2="12" y2="12"></line>
+        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" style="width: 40px; height: 40px;">
+          <rect x="2" y="2" width="40" height="40" rx="10" ry="10" fill="#4285f4"/>
+          <text x="22" y="24" fill="white" font-family="system-ui" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="middle">S</text>
+        </svg>`
+      },
+      sap2000_tool: {
+        bg: "#B8D4F1",
+        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" style="width: 40px; height: 40px;">
+          <rect x="2" y="2" width="40" height="40" rx="10" ry="10" fill="#4285f4"/>
+          <text x="22" y="24" fill="white" font-family="system-ui" font-size="24" font-weight="700" text-anchor="middle" dominant-baseline="middle">S</text>
         </svg>`
       },
       footing_design: {
@@ -56,7 +58,7 @@ export class WorkflowGraph {
           <rect x="2" y="2" width="20" height="20" rx="2"></rect>
         </svg>`
       },
-      table_output: { 
+      table_output: {
         bg: "#FFFFFF",
         isOutput: true,
         icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -65,6 +67,17 @@ export class WorkflowGraph {
           <line x1="3" y1="15" x2="21" y2="15"></line>
           <line x1="9" y1="3" x2="9" y2="21"></line>
           <line x1="15" y1="3" x2="15" y2="21"></line>
+        </svg>`
+      },
+      footings_plot_output: {
+        bg: "#FFFFFF",
+        isOutput: true,
+        icon: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="6" height="6"></rect>
+          <rect x="14" y="4" width="6" height="6"></rect>
+          <rect x="4" y="14" width="6" height="6"></rect>
+          <rect x="14" y="14" width="6" height="6"></rect>
+          <rect x="2" y="2" width="20" height="20" rx="2"></rect>
         </svg>`
       },
       default: { 

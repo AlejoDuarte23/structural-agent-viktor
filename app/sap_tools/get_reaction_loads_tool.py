@@ -15,10 +15,6 @@ class GetReactionLoadsArgs(BaseModel):
         default=True,
         description="Whether to run analysis before extracting data. Set to False if analysis is already complete.",
     )
-    include_cases: bool = Field(
-        default=False,
-        description="Whether to include load cases in addition to load combinations. Default is False (combos only).",
-    )
 
 
 async def get_reaction_loads_func(ctx: Any, args: str) -> str:
@@ -27,7 +23,7 @@ async def get_reaction_loads_func(ctx: Any, args: str) -> str:
 
     This tool connects to SAP2000 and extracts reactions for all support nodes across:
     - All load combinations
-    - Optionally, all load cases
+    - All load cases
 
     For each node and load combo/case, extracts:
     - F1, F2, F3 (forces in X, Y, Z directions in kN)
@@ -55,12 +51,8 @@ async def get_reaction_loads_func(ctx: Any, args: str) -> str:
                 logger.info("Running SAP2000 analysis...")
                 run_analysis(sap.SapModel)
 
-            logger.info(
-                f"Extracting reaction loads (include_cases={payload.include_cases})..."
-            )
-            supports, reactions = get_support_reactions_all_combos(
-                sap.SapModel, include_cases=payload.include_cases
-            )
+            logger.info("Extracting reaction loads for all load combinations and cases...")
+            supports, reactions = get_support_reactions_all_combos(sap.SapModel)
 
         # Store in Viktor Storage
         data_json = json.dumps(reactions, indent=2)
@@ -145,7 +137,7 @@ def get_reaction_loads_tool() -> Any:
         name="get_reaction_loads",
         description=(
             "Extract reaction loads from active SAP2000 model for all support nodes. "
-            "Connects to SAP2000 via COM interface and retrieves reactions for all load combinations (and optionally cases):\n"
+            "Connects to SAP2000 via COM interface and retrieves reactions for all load combinations and cases:\n"
             "- F1, F2, F3: Forces in X, Y, Z directions (kN)\n"
             "- M1, M2, M3: Moments about X, Y, Z axes (kN·m)\n"
             "The extracted data is organized by node name, then by load combo/case name, "
