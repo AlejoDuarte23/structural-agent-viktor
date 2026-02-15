@@ -185,6 +185,20 @@ def workflow_agent_sync_stream(
                  * Or use 'governing_load_combo' to force one combo for ALL nodes (e.g., 'ULS3')
                  * If neither specified, automatically checks all combos and selects max F3 per node
 
+               - calculate_footing_sizing: Optimize footing geometry to minimize weight
+                 * URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
+                 * Automatically loads node coordinates and reaction loads from SAP2000 storage
+                 * REQUIRES: get_support_coordinates and get_reaction_loads must be run first
+                 * Uses iterative optimization to find lightest footing satisfying bearing capacity
+                 * Handles eccentric loading (single and biaxial eccentricity cases)
+                 * User provides: material properties (gamma_concrete, gamma_fill), bearing capacity table, min footing length
+
+                 LOAD COMBINATION SELECTION:
+                 * Use 'load_combinations_to_check' to specify which combos to use (e.g., ['ULS2', 'ULS3'])
+                   Tool optimizes footings to satisfy ALL specified combinations per node
+                 * Can pass single combo name as string (e.g., 'ULS3')
+                 * If None, uses all available combos for optimization
+
             5. VISUALIZATION TOOLS
                - generate_plotly: Create line/bar plots from x and y data
                  * Must call show_hide_plot with action="show" after to display
@@ -225,10 +239,13 @@ def workflow_agent_sync_stream(
                - footing_design: Footing design per ACI 318/NSR-10
                  → URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
                  → Typically depends on: sap2000_load_combos, sap2000_extraction
+               - footing_sizing: Footing sizing optimization (minimize weight)
+                 → URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
+                 → Typically depends on: sap2000_load_combos, sap2000_extraction
                - plot_output: Generic visualization node (no URL)
                - table_output: Table display node (no URL)
                - footings_plot_output: Footing plan view visualization node (no URL)
-                 → Typically depends on: footing_design
+                 → Typically depends on: footing_design or footing_sizing
 
             GENERAL APPROACH:
             - Extract data from SAP2000 when requested

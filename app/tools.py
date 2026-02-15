@@ -4,6 +4,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, Json
 
 from app.viktor_tools.footing_design_tool import calculate_footing_design_tool
+from app.viktor_tools.footing_sizing_tool import calculate_footing_sizing_tool
 from app.viktor_tools.plotting_tool import generate_plot, show_hide_plot_tool
 from app.viktor_tools.table_tool import generate_table, show_hide_table_tool
 from app.viktor_tools.plot_footings_tool import (
@@ -25,6 +26,7 @@ from app.sap_tools.display_reaction_loads_table import (
 # Friendly display names for tools in chat
 TOOL_DISPLAY_NAMES: dict[str, str] = {
     "calculate_footing_design": "Calculate Footing Design",
+    "calculate_footing_sizing": "Calculate Footing Sizing (Optimization)",
     "generate_plotly": "Generate Plot",
     "generate_table": "Generate Table",
     "show_hide_plot": "Show/Hide Plot",
@@ -85,6 +87,7 @@ class DummyWorkflowNode(BaseModel):
         "sap2000_load_combos",
         "sap2000_extraction",
         "footing_design",
+        "footing_sizing",
         "plot_output",
         "table_output",
         "footings_plot_output",
@@ -248,6 +251,7 @@ def get_tools() -> list[Any]:
         display_support_coordinates_table_tool(),
         display_reaction_loads_table_tool(),
         calculate_footing_design_tool(),
+        calculate_footing_sizing_tool(),
         generate_plot(),
         generate_table(),
         show_hide_plot_tool(),
