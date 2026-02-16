@@ -53,6 +53,7 @@ async def get_reaction_loads_func(ctx: Any, args: str) -> str:
 
             logger.info("Extracting reaction loads for all load combinations and cases...")
             supports, reactions = get_support_reactions_all_combos(sap.SapModel)
+            print(reactions)
 
         # Store in Viktor Storage
         data_json = json.dumps(reactions, indent=2)

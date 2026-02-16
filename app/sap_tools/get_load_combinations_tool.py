@@ -91,7 +91,7 @@ def get_load_combinations_tool() -> Any:
             "Returns:\n"
             "- Load combination names (e.g., 'ULS2', 'ULS3', 'SLS1')\n"
             "- Load case names (e.g., 'DEAD', 'LIVE', 'WIND')\n\n"
-            "Use this tool BEFORE calling get_reaction_loads or calculate_footing_design "
+            "Use this tool BEFORE calling get_reaction_loads or calculate_footing_sizing "
             "to understand what load combinations and cases are available in the model.\n\n"
             "IMPORTANT: SAP2000 must be running with a model open and set as active API instance "
             "(Tools → Set as active instance for API)."

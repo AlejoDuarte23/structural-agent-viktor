@@ -171,20 +171,6 @@ def workflow_agent_sync_stream(
                → Call display_support_coordinates_table
 
             4. FOOTING DESIGN (Integrated with SAP2000)
-               - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10
-                 * URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
-                 * Automatically loads node coordinates and reaction loads from SAP2000 storage
-                 * REQUIRES: get_support_coordinates and get_reaction_loads must be run first
-                 * Performs punching shear, beam shear, and bearing capacity checks
-                 * Finds optimal pedestal and footing dimensions for each support node
-                 * User provides: material properties (fc, fy) and soil properties (bearing capacity, phi)
-
-                 LOAD COMBINATION SELECTION:
-                 * Use 'load_combinations_to_check' to specify which combos to consider (e.g., ['ULS2', 'ULS3'])
-                   Tool selects governing combo from this list per node based on max F3
-                 * Or use 'governing_load_combo' to force one combo for ALL nodes (e.g., 'ULS3')
-                 * If neither specified, automatically checks all combos and selects max F3 per node
-
                - calculate_footing_sizing: Optimize footing geometry to minimize weight
                  * URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
                  * Automatically loads node coordinates and reaction loads from SAP2000 storage
@@ -199,6 +185,26 @@ def workflow_agent_sync_stream(
                  * Can pass single combo name as string (e.g., 'ULS3')
                  * If None, uses all available combos for optimization
 
+               - calculate_footing_concrete_rebar: Detailed concrete design checks per ACI 318-19
+                 * URL: https://beta.viktor.ai/workspaces/4864/app/editor/2640
+                 * Automatically loads node coordinates, reaction loads, AND footing dimensions from storage
+                 * REQUIRES: get_support_coordinates, get_reaction_loads, AND calculate_footing_sizing must be run first
+                 * Performs: punching shear (two-way), one-way shear (beam), flexure, rebar spacing
+                 * Checks ALL load combinations and identifies critical cases for each check type
+                 * User provides: concrete properties (fc, fy, cover, db)
+                 * Results stored in storage for further use
+
+                 LOAD COMBINATION SELECTION:
+                 * Use 'load_combinations_to_check' to specify which combos to check (e.g., ['ULS2', 'ULS3'])
+                   Tool checks ALL specified combinations and finds governing cases
+                 * Can pass single combo name as string (e.g., 'ULS3')
+                 * If None, checks all available combos
+
+                 TYPICAL WORKFLOW:
+                 1. get_support_coordinates + get_reaction_loads (SAP2000 data)
+                 2. calculate_footing_sizing (optimize dimensions)
+                 3. calculate_footing_concrete_rebar (detailed ACI 318 checks) ← This tool
+
             5. VISUALIZATION TOOLS
                - generate_plotly: Create line/bar plots from x and y data
                  * Must call show_hide_plot with action="show" after to display
@@ -209,17 +215,17 @@ def workflow_agent_sync_stream(
                - generate_footings_plot: Create plan view visualization of footing designs
                  * AUTOMATIC WORKFLOW (Recommended):
                    → Just call with {} (empty parameters) - no manual data entry needed!
-                   → Auto-loads design results from calculate_footing_design storage
+                   → Auto-loads design results from calculate_footing_sizing storage
                    → Auto-loads node coordinates from get_support_coordinates storage
                    → Automatically merges data and creates plot
                  * VISUAL OUTPUT:
                    → Footings shown as light gray rectangles with dimensions
                    → Pedestals shown as dark gray rectangles
-                   → Node labels and hover info with weights, governing combos
+                   → Node labels and hover info
                    → Equal aspect ratio for accurate geometric representation
                  * PREREQUISITES:
                    → get_support_coordinates (for node x,y positions)
-                   → calculate_footing_design (for design dimensions)
+                   → calculate_footing_sizing (for design dimensions)
                  * Must call show_hide_footings_plot with action="show" after to display
 
                - show_hide_plot: Control Plot view panel visibility
@@ -236,16 +242,16 @@ def workflow_agent_sync_stream(
                - sap2000_tool: SAP2000 connection check (no URL - connection verification)
                - sap2000_load_combos: Get available load combinations (no URL - SAP2000 query)
                - sap2000_extraction: SAP2000 data extraction step (no URL - represents extraction process)
-               - footing_design: Footing design per ACI 318/NSR-10
-                 → URL: https://beta.viktor.ai/workspaces/4800/app/editor/2581
-                 → Typically depends on: sap2000_load_combos, sap2000_extraction
                - footing_sizing: Footing sizing optimization (minimize weight)
                  → URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
                  → Typically depends on: sap2000_load_combos, sap2000_extraction
+               - footing_concrete_rebar: Concrete rebar design per ACI 318-19
+                 → URL: https://beta.viktor.ai/workspaces/4864/app/editor/2640
+                 → Typically depends on: footing_sizing (requires footing dimensions)
                - plot_output: Generic visualization node (no URL)
                - table_output: Table display node (no URL)
                - footings_plot_output: Footing plan view visualization node (no URL)
-                 → Typically depends on: footing_design or footing_sizing
+                 → Typically depends on: footing_sizing
 
             GENERAL APPROACH:
             - Extract data from SAP2000 when requested

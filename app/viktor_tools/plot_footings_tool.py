@@ -33,7 +33,7 @@ class PlotFootingsInput(BaseModel):
 
     footings: list[FootingDesignData] | None = Field(
         default=None,
-        description="List of footing designs to plot. If not provided, will auto-load from footing_design_results storage.",
+        description="List of footing designs to plot. If not provided, will auto-load from storage.",
     )
     title: str = Field(
         default="Footing Layout Plan - Optimal Designs",
@@ -63,40 +63,41 @@ async def generate_footings_plot_func(ctx: Any, args: str) -> str:
     # Step 1: Auto-load design results from storage if footings not provided
     if (not payload.footings or len(payload.footings) == 0) and payload.auto_load_from_storage:
         try:
-            design_results_file = vkt.Storage().get("footing_design_results", scope="entity")
+            design_results_file = vkt.Storage().get("footing_sizing_results", scope="entity")
             if not design_results_file:
                 return (
                     "❌ No footing designs provided and no design results found in storage.\n"
                     "Either:\n"
-                    "1. Run 'calculate_footing_design' first to generate designs, OR\n"
+                    "1. Run 'calculate_footing_sizing' first to generate designs, OR\n"
                     "2. Provide explicit footing designs in the 'footings' parameter"
                 )
 
             design_results_data = json.loads(design_results_file.getvalue_binary().decode("utf-8"))
-            designs = design_results_data.get("designs", [])
+            results = design_results_data.get("results", {})
 
-            if not designs:
+            if not results:
                 return "❌ No successful footing designs found in storage results."
 
-            # Convert FootingDesignOutput format to FootingDesignData list
+            # Convert FootingSizingOutput format to FootingDesignData list
             payload.footings = []
-            for design in designs:
+            for node_name, node_result in results.items():
+                geom = node_result.get("footing_geometry", {})
                 payload.footings.append(
                     FootingDesignData(
-                        node_name=design["node_name"],
+                        node_name=node_name,
                         x=None,  # Will be filled from coords
                         y=None,  # Will be filled from coords
-                        B=design["footing_B_mm"] / 1000.0,  # Convert mm to m
-                        L=design["footing_L_mm"] / 1000.0,
-                        h=design["footing_h_mm"] / 1000.0,
-                        pedestal_size=design["pedestal_size_mm"] / 1000.0,
-                        pedestal_height=design["pedestal_height_mm"] / 1000.0,
-                        total_weight=design.get("total_weight_kN"),
-                        governing_combo=design.get("governing_combo"),
+                        B=geom.get("width_B_m"),  # Already in meters
+                        L=geom.get("length_L_m"),
+                        h=geom.get("slab_thickness_h_m"),
+                        pedestal_size=geom.get("pedestal_base_m"),
+                        pedestal_height=geom.get("pedestal_height_m"),
+                        total_weight=None,  # Not available in sizing results
+                        governing_combo=None,  # Not available in sizing results
                     )
                 )
         except Exception as e:
-            return f"❌ Error loading footing design results from storage: {e}"
+            return f"❌ Error loading footing sizing results from storage: {e}"
 
     # Validation
     if not payload.footings or len(payload.footings) == 0:
@@ -189,7 +190,7 @@ def generate_footings_plot_tool() -> Any:
             "\n\n"
             "AUTOMATIC MODE (Recommended):\n"
             "Simply call with {} (empty parameters) to auto-load:\n"
-            "1. Design results from 'calculate_footing_design' (dimensions, weights, governing combos)\n"
+            "1. Design results from 'calculate_footing_sizing' (dimensions, geometry)\n"
             "2. Node coordinates from 'get_support_coordinates' (x, y positions)\n"
             "The tool will automatically merge this data and create the plot.\n\n"
             "MANUAL MODE:\n"
@@ -198,12 +199,12 @@ def generate_footings_plot_tool() -> Any:
             "VISUALIZATION:\n"
             "- Footings shown as light gray rectangles with dimensions\n"
             "- Pedestals shown as dark gray rectangles\n"
-            "- Node labels and hover info with weights and governing combos\n"
+            "- Node labels and hover info\n"
             "- Equal aspect ratio for accurate geometric representation\n\n"
             "After generating, call show_hide_footings_plot with action='show' to display.\n\n"
             "PREREQUISITES:\n"
             "- get_support_coordinates (for node positions)\n"
-            "- calculate_footing_design (for design results) if using automatic mode"
+            "- calculate_footing_sizing (for design results) if using automatic mode"
         ),
         params_json_schema=PlotFootingsInput.model_json_schema(),
         on_invoke_tool=generate_footings_plot_func,

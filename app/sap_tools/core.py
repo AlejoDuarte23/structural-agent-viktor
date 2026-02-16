@@ -275,10 +275,12 @@ def get_support_reactions_all_combos(SapModel) -> Tuple[List[Dict[str, Any]], Di
        - Dict of reactions organized by joint name, then by load combo/case
    """
    supports = get_support_nodes(SapModel)
+   print(f"{len(supports)=}")
 
    # Get all load combinations
    names: List[str] = []
    names.extend(get_all_load_combos(SapModel))
+   print(f"{names=}")
 
    # Organize reactions by joint, then by load combo
    reactions_by_joint: Dict[str, Dict[str, Any]] = {}
@@ -288,11 +290,15 @@ def get_support_reactions_all_combos(SapModel) -> Tuple[List[Dict[str, Any]], Di
        reactions_by_joint[j] = {}
 
    for name in names:
+       print(f"Getting {name=}")
        selected_type = select_results_output(SapModel, name)
+       print(f"{selected_type=}")
 
        for s in supports:
            j = s["Joint"]
+           print(f"{j=}")
            r = get_joint_reaction_first_row(SapModel, j)
+           print(f"{r=}")
 
            # Store reaction for this joint and load combo
            reactions_by_joint[j][name] = {
