@@ -104,118 +104,160 @@ def workflow_agent_sync_stream(
         call_id_to_name: dict[str, str] = {}
         try:
             agent = Agent(
-                name="Workflow Assistant",
+                name="Structural Analysis Assistant",
                 instructions=dedent(
-                    """You are a helpful assistant that creates structural engineering workflows for bridge design.
-            
+                    """You are a helpful assistant for structural engineering tasks using SAP2000 integration.
+
             STYLE RULES:
             - Be succinct and friendly - avoid over-elaboration
             - Don't aggressively propose actions - wait for user direction
             - Provide clear, concise responses
             - Only suggest next steps when explicitly asked or when clarification is needed
             - Markdown is allowed, but don't use tables; format with bold, headings, sections, and links.
-            
-            YOU HAVE TWO THREE ROLES:
-            
-            1. CREATE WORKFLOWS: Use workflow tools to create visual workflow graphs
-               - create_dummy_workflow_node: Create individual workflow nodes
-               - compose_workflow_graph: Compose multiple nodes into a DAG visualization
-               This creates a visual representation of the engineering process flow.
-            
-            2. PERFORM CALCULATIONS: Use VIKTOR app tools to execute actual engineering calculations
-               - generate_geometry: Generate 3D bridge geometry
-               - calculate_wind_loads: Perform wind load analysis
-               - calculate_structural_analysis: Perform structural analysis on bridges
-               - calculate_sensitivity_analysis: Run sensitivity analysis on bridge height
-               - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10
-               These tools call real VIKTOR applications and return actual engineering results.
-            
-            3. VISUALIZE DATA: Use visualization tools to display results
-               - generate_plotly: Create bar plots from x and y data (agent tool, not a VIKTOR app)
-               - generate_table: Create tables with optional row/column headers (agent tool, not a VIKTOR app)
-               These create visualizations in the Plot and Table view panels.
-               IMPORTANT: After calling generate_plotly, call show_hide_plot with action="show" to display the Plot view.
-               After calling generate_table, call show_hide_table with action="show" to display the Table view.
-            
-            Available VIKTOR App Tools (for actual calculations):
-            - generate_geometry: Generate 3D parametric truss bridge geometry (nodes, lines, members)
-              URL: https://beta.viktor.ai/workspaces/4704/app/editor/2447
-              Parameters: bridge_length, bridge_width, bridge_height, n_divisions, cross_section (HSS200x200x8, HSS250x250x10, HSS300x300x12, HSS350x350x16)
-            
-            - calculate_wind_loads: Calculate wind loads based on ASCE 7 standards
-              URL: https://beta.viktor.ai/workspaces/4713/app/editor/2452
-              Parameters: risk_category, wind_speed_ms, exposure_category, bridge dimensions
-            
-            - calculate_structural_analysis: Run structural analysis on bridge structures
-              URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
-              Parameters: bridge_length, bridge_width, bridge_height, n_divisions, cross_section, load_q, wind_pressure
-            
-            - calculate_sensitivity_analysis: Run sensitivity analysis varying bridge height
-              URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
-              Parameters: bridge_length, bridge_width, n_divisions, cross_section, load_q, wind_pressure, min_height, max_height, n_steps
-            
-            - calculate_footing_design: Design concrete footings according to ACI 318/NSR-10 standards
-              URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
-              Parameters: node_names, node_x_coords_mm, node_y_coords_mm, axial_loads_kN, moments_mx_kNm, moments_my_kNm,
-                          fc_mpa (concrete strength), fy_mpa (steel yield), gamma_fill_kNm3 (fill unit weight),
-                          gamma_soil_kNm3, phi_deg (soil friction angle), bearing_depths_m, bearing_capacities_kPa
-              Performs two-way shear (punching), one-way shear (beam action), and bearing capacity checks.
-              Iterates to find optimal (minimum weight) footing and pedestal dimensions.
-            
-            Available Agent Tools (local visualization, not VIKTOR apps):
-            - generate_plotly: Generate bar plots for data visualization
-              Parameters: x (list of floats), y (list of floats)
-              Creates a Plotly bar chart displayed in the Plot view panel
-            
-            IMPORTANT: When creating workflow nodes, include the corresponding URL from above.
-            For footing_design nodes, use: https://beta.viktor.ai/workspaces/4796/app/editor/2577
-            
-            Available workflow node types (for visualization with URLs):
-            - geometry_generation: Define bridge geometry (bridge_length, bridge_width, bridge_height, n_divisions, cross_section)
-              → Use URL: https://beta.viktor.ai/workspaces/4704/app/editor/2447
-            - windload_analysis: Wind load calculations (region, wind_speed, exposure_level)
-              → Use URL: https://beta.viktor.ai/workspaces/4713/app/editor/2452
-            - structural_analysis: Structural analysis on bridges with load combinations
-              → Use URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
-            - sensitivity_analysis: Sensitivity analysis varying bridge height
-              → Use URL: https://beta.viktor.ai/workspaces/4702/app/editor/2437
-            - footing_design: Concrete footing design per ACI 318/NSR-10 (pedestal, slab, bearing checks)
-              → Use URL: https://beta.viktor.ai/workspaces/4796/app/editor/2577
-            
-            OUTPUT NODE TYPES (local visualization tools, NO URL - displayed with dashed border):
-            - plot_output: Bar chart visualization of results
-              → No URL (agent tool, not a VIKTOR app)
-              → Can ONLY depend on sensitivity_analysis (one dependency only)
-              → Maximum ONE plot_output node per workflow
-            - table_output: Table display of results  
-              → No URL (agent tool, not a VIKTOR app)
-              → Can depend on ANY analysis node (geometry_generation, windload_analysis, seismic_analysis, structural_analysis, sensitivity_analysis)
-            
-            WORKFLOW COMPOSITION RULES:
-            - Build the SMALLEST workflow that satisfies the user's request (be generous with table_output nodes)
-            - Only add upstream dependencies when the user explicitly asks for end-to-end calculations
-           - If user asks only for "wind loads", create ONLY the windload_analysis node
-            - Add dependencies (geometry, loads, etc.) ONLY when user mentions them or asks for complete analysis
-            - OUTPUT NODES: plot_output and table_output have NO url field (leave it null/empty)
-            
-            Workflow dependency reference (use only when building full workflows):
-            1. GeometryGeneration first (no dependencies)
-            2. WindloadAnalysis depends on geometry_generation
-            3. StructuralAnalysis depends on geometry_generation and wind load analysis
-            4. SensitivityAnalysis depends on geometry_generation and wind load analysis and structural analysis for exploratory purpose
-            5. FootingDesign depends on structural_analysis (uses reaction loads from structural analysis)
-            6. PlotOutput depends on sensitivity_analysis ONLY (max 1 per workflow)
-            7. TableOutput can depend on any node (Can be added in multiple nodes. But user can visualize just one output at the time be propositive add it in at least two node)
-            
-            When composing a workflow, use the compose_workflow_graph tool with all nodes
-            defined together. Set proper depends_on relationships between nodes.
-            
-            You can either:
-            - Create workflow visualizations to show the process flow
-            - Execute actual calculations using VIKTOR app tools
-            
-            IMPORTANT: Always create the workflow first, ask for feedback to the user and then run the calculations.
-           
+
+            YOUR CAPABILITIES:
+
+            1. SAP2000 CONNECTION CHECK
+               Verify SAP2000 availability before running extractions:
+
+               - check_sap2000_instance: Check if SAP2000 is running and ready
+                 * Returns: Connection status (✓ connected or ✗ failed with troubleshooting)
+                 * Verifies: SAP2000 is running, model is open, API instance is active
+                 * Use this FIRST before any SAP2000 operations to avoid errors
+
+            2. SAP2000 DATA EXTRACTION
+               Connect to SAP2000 via COM interface and extract model data:
+
+               - get_load_combinations: List all available load combinations and cases
+                 * Returns: Names of load combos (e.g., 'ULS2', 'ULS3', 'SLS1')
+                 * Use this FIRST to see what combos are available
+                 * Helps decide which combos to use for design
+
+               - get_support_coordinates: Extract support node coordinates and restraints
+                 * Returns: Joint name, X/Y/Z coordinates (m), restraint conditions (U1-U3, R1-R3)
+                 * Data stored in Viktor Storage under key: "model_support_coordinates"
+
+               - get_reaction_loads: Extract reaction forces and moments for all load combinations
+                 * Returns: F1/F2/F3 (kN), M1/M2/M3 (kN·m) for each node and load combo
+                 * Data stored in Viktor Storage under key: "model_reaction_loads"
+
+               IMPORTANT: SAP2000 must be running with a model open and configured as active API instance
+               (Tools → Set as active instance for API in SAP2000).
+
+               TYPICAL WORKFLOW:
+               0. check_sap2000_instance → Verify connection (recommended first step)
+               1. get_load_combinations → See available combos
+               2. get_support_coordinates → Extract node positions
+               3. get_reaction_loads → Extract forces/moments
+
+            3. DATA DISPLAY
+               Transform extracted SAP2000 data into table views:
+
+               - display_support_coordinates_table: Show support nodes in table format
+                 * Columns: Joint, X (m), Y (m), Z (m), U1, U2, U3, R1, R2, R3
+                 * Automatically shows Table view panel
+                 * Must run get_support_coordinates first
+
+               - display_reaction_loads_table: Show reaction loads in flattened table
+                 * Columns: Node, Load Combo, F1 (kN), F2 (kN), F3 (kN), M1 (kN·m), M2 (kN·m), M3 (kN·m)
+                 * Shows all nodes × all load combinations
+                 * Automatically shows Table view panel
+                 * Must run get_reaction_loads first
+
+               TYPICAL WORKFLOW:
+               User: "Extract support coordinates"
+               → Call get_support_coordinates
+               User: "Show them in a table"
+               → Call display_support_coordinates_table
+
+            4. FOOTING DESIGN (Integrated with SAP2000)
+               - calculate_footing_sizing: Optimize footing geometry to minimize weight
+                 * URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
+                 * Automatically loads node coordinates and reaction loads from SAP2000 storage
+                 * REQUIRES: get_support_coordinates and get_reaction_loads must be run first
+                 * Uses iterative optimization to find lightest footing satisfying bearing capacity
+                 * Handles eccentric loading (single and biaxial eccentricity cases)
+                 * User provides: material properties (gamma_concrete, gamma_fill), bearing capacity table, min footing length
+
+                 LOAD COMBINATION SELECTION:
+                 * Use 'load_combinations_to_check' to specify which combos to use (e.g., ['ULS2', 'ULS3'])
+                   Tool optimizes footings to satisfy ALL specified combinations per node
+                 * Can pass single combo name as string (e.g., 'ULS3')
+                 * If None, uses all available combos for optimization
+
+               - calculate_footing_concrete_rebar: Detailed concrete design checks per ACI 318-19
+                 * URL: https://beta.viktor.ai/workspaces/4864/app/editor/2640
+                 * Automatically loads node coordinates, reaction loads, AND footing dimensions from storage
+                 * REQUIRES: get_support_coordinates, get_reaction_loads, AND calculate_footing_sizing must be run first
+                 * Performs: punching shear (two-way), one-way shear (beam), flexure, rebar spacing
+                 * Checks ALL load combinations and identifies critical cases for each check type
+                 * User provides: concrete properties (fc, fy, cover, db)
+                 * Results stored in storage for further use
+
+                 LOAD COMBINATION SELECTION:
+                 * Use 'load_combinations_to_check' to specify which combos to check (e.g., ['ULS2', 'ULS3'])
+                   Tool checks ALL specified combinations and finds governing cases
+                 * Can pass single combo name as string (e.g., 'ULS3')
+                 * If None, checks all available combos
+
+                 TYPICAL WORKFLOW:
+                 1. get_support_coordinates + get_reaction_loads (SAP2000 data)
+                 2. calculate_footing_sizing (optimize dimensions)
+                 3. calculate_footing_concrete_rebar (detailed ACI 318 checks) ← This tool
+
+            5. VISUALIZATION TOOLS
+               - generate_plotly: Create line/bar plots from x and y data
+                 * Must call show_hide_plot with action="show" after to display
+
+               - generate_table: Create custom tables with data and column headers
+                 * Must call show_hide_table with action="show" after to display
+
+               - generate_footings_plot: Create plan view visualization of footing designs
+                 * AUTOMATIC WORKFLOW (Recommended):
+                   → Just call with {} (empty parameters) - no manual data entry needed!
+                   → Auto-loads design results from calculate_footing_sizing storage
+                   → Auto-loads node coordinates from get_support_coordinates storage
+                   → Automatically merges data and creates plot
+                 * VISUAL OUTPUT:
+                   → Footings shown as light gray rectangles with dimensions
+                   → Pedestals shown as dark gray rectangles
+                   → Node labels and hover info
+                   → Equal aspect ratio for accurate geometric representation
+                 * PREREQUISITES:
+                   → get_support_coordinates (for node x,y positions)
+                   → calculate_footing_sizing (for design dimensions)
+                 * Must call show_hide_footings_plot with action="show" after to display
+
+               - show_hide_plot: Control Plot view panel visibility
+               - show_hide_table: Control Table view panel visibility
+               - show_hide_footings_plot: Control Footings Plot view panel visibility
+
+            6. WORKFLOW GRAPHS (Optional)
+               Create visual workflow diagrams to document engineering processes:
+
+               - create_dummy_workflow_node: Create individual nodes
+               - compose_workflow_graph: Combine nodes into DAG visualization
+
+               Available node types for workflows:
+               - sap2000_tool: SAP2000 connection check (no URL - connection verification)
+               - sap2000_load_combos: Get available load combinations (no URL - SAP2000 query)
+               - sap2000_extraction: SAP2000 data extraction step (no URL - represents extraction process)
+               - footing_sizing: Footing sizing optimization (minimize weight)
+                 → URL: https://beta.viktor.ai/workspaces/4865/app/editor/2639
+                 → Typically depends on: sap2000_load_combos, sap2000_extraction
+               - footing_concrete_rebar: Concrete rebar design per ACI 318-19
+                 → URL: https://beta.viktor.ai/workspaces/4864/app/editor/2640
+                 → Typically depends on: footing_sizing (requires footing dimensions)
+               - plot_output: Generic visualization node (no URL)
+               - table_output: Table display node (no URL)
+               - footings_plot_output: Footing plan view visualization node (no URL)
+                 → Typically depends on: footing_sizing
+
+            GENERAL APPROACH:
+            - Extract data from SAP2000 when requested
+            - Display extracted data in tables for user review
+            - Use footing design tool with extracted data (future integration)
+            - Create workflow graphs to document process flow (optional)
             """
                 ),
                 model="gpt-5-mini",
@@ -317,16 +359,38 @@ def get_table_visibility(params, **kwargs):
         return False
 
 
+def get_footings_plot_visibility(params, **kwargs):
+    if not params.chat:
+        entities = vkt.Storage().list(scope="entity")
+        for entity in entities:
+            if entity == "show_footings_plot":
+                vkt.Storage().delete("show_footings_plot", scope="entity")
+            if entity == "PlotFootingsTool":
+                vkt.Storage().delete("PlotFootingsTool", scope="entity")
+
+    try:
+        out_bool = vkt.Storage().get("show_footings_plot", scope="entity").getvalue()
+        print(f"footings_plot {out_bool=}")
+        if out_bool == "show":
+            return True
+        return False
+    except Exception:
+        # If there is no data, then view is hidden.
+        return False
+
+
 class Parametrization(vkt.Parametrization):
-    title = vkt.Text("""# VIKTOR Bridge Workflow Agent
-    
-Create visual workflow graphs for bridge engineering projects! 🎨
-    
+    title = vkt.Text("""# VIKTOR Structural Analysis Agent
+
+Extract and analyze data from SAP2000 models! 🏗️
+
 **What I can do:**
-- 📊 Build interactive workflow diagrams with clickable tool links
-- 🔧 Execute real engineering calculations (bridge geometry, wind loads, seismic analysis, footing design)
-- 🔗 Connect multiple analysis steps into complete workflows
-    
+- 📊 Extract support coordinates and reaction loads from SAP2000 via COM
+- 📋 Display extracted data in interactive tables
+- 🔧 Design concrete footings according to ACI 318/NSR-10
+- 📈 Visualize data with plots and charts
+- 🔗 Create workflow graphs to document processes
+
 """)
     chat = vkt.Chat("", method="call_llm")
 
@@ -461,3 +525,171 @@ class Controller(vkt.Controller):
         except Exception as e:
             logger.exception(f"Error in table_view: {e}")
             return vkt.TableResult([["Error", "using Tool"]])
+
+    @vkt.PlotlyView("Footings Plot", width=100, visible=get_footings_plot_visibility)
+    def footings_plot_view(self, params, **kwargs) -> vkt.PlotlyResult:
+        if not params.chat:
+            try:
+                vkt.Storage().delete("PlotFootingsTool", scope="entity")
+            except Exception:
+                pass
+        try:
+            from app.viktor_tools.plot_footings_tool import PlotFootingsInput
+
+            raw = (
+                vkt.Storage()
+                .get("PlotFootingsTool", scope="entity")
+                .getvalue_binary()
+                .decode("utf-8")
+            )
+            logger.info(f"Footings plot raw data: {raw}")
+            tool_input = PlotFootingsInput.model_validate_json(raw)
+            logger.info(f"Footings plot tool_input: {tool_input}")
+
+            # Create Plotly figure
+            fig = go.Figure()
+
+            # Colors
+            footing_color = "rgba(180, 180, 180, 0.6)"
+            pedestal_color = "rgba(100, 100, 100, 0.8)"
+
+            # Track bounds for layout
+            all_x = []
+            all_y = []
+
+            for footing in tool_input.footings:
+                # Skip nodes with missing coordinates
+                if footing.x is None or footing.y is None:
+                    logger.warning(
+                        f"Skipping node {footing.node_name} - missing coordinates"
+                    )
+                    continue
+
+                cx = footing.x
+                cy = footing.y
+                node_name = footing.node_name
+
+                if footing.B is not None and footing.L is not None:
+                    # Node has design - draw footing and pedestal
+                    B = footing.B
+                    L = footing.L
+                    h = footing.h or 0.0
+                    ped = footing.pedestal_size or 0.0
+                    ped_h = footing.pedestal_height or 0.0
+
+                    # Draw footing rectangle
+                    x0, x1 = cx - B / 2, cx + B / 2
+                    y0, y1 = cy - L / 2, cy + L / 2
+                    hover_text = f"{node_name}<br>Footing: {B:.2f}m × {L:.2f}m<br>Thickness: {h * 1000:.0f}mm"
+                    if footing.pedestal_height is not None:
+                        hover_text += f"<br>Depth: {(ped_h + h) * 1000:.0f}mm"
+                    if footing.total_weight is not None:
+                        hover_text += f"<br>Weight: {footing.total_weight:.1f}kN"
+                    if footing.governing_combo:
+                        hover_text += f"<br>Combo: {footing.governing_combo}"
+
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[x0, x1, x1, x0, x0],
+                            y=[y0, y0, y1, y1, y0],
+                            mode="lines",
+                            fill="toself",
+                            fillcolor=footing_color,
+                            line=dict(color="rgba(100,100,100,1)", width=2),
+                            name=f"{node_name} Footing",
+                            hoverinfo="text",
+                            text=hover_text,
+                            showlegend=False,
+                        )
+                    )
+
+                    # Draw pedestal rectangle if exists
+                    if ped > 0:
+                        px0, px1 = cx - ped / 2, cx + ped / 2
+                        py0, py1 = cy - ped / 2, cy + ped / 2
+                        ped_hover = f"{node_name}<br>Pedestal: {ped * 1000:.0f}mm × {ped * 1000:.0f}mm<br>Height: {ped_h * 1000:.0f}mm"
+                        fig.add_trace(
+                            go.Scatter(
+                                x=[px0, px1, px1, px0, px0],
+                                y=[py0, py0, py1, py1, py0],
+                                mode="lines",
+                                fill="toself",
+                                fillcolor=pedestal_color,
+                                line=dict(color="rgba(50,50,50,1)", width=2),
+                                name=f"{node_name} Pedestal",
+                                hoverinfo="text",
+                                text=ped_hover,
+                                showlegend=False,
+                            )
+                        )
+
+                    # Add node label
+                    fig.add_annotation(
+                        x=cx,
+                        y=cy,
+                        text=f"<b>{node_name}</b>",
+                        showarrow=False,
+                        font=dict(size=11, color="white"),
+                        bgcolor="rgba(50,50,50,0.7)",
+                        borderpad=4,
+                    )
+
+                    all_x.extend([x0, x1])
+                    all_y.extend([y0, y1])
+                else:
+                    # Node without design - just mark position
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[cx],
+                            y=[cy],
+                            mode="markers+text",
+                            marker=dict(size=12, color="red", symbol="x"),
+                            text=[node_name],
+                            textposition="top center",
+                            name=f"{node_name} (No design)",
+                            showlegend=False,
+                        )
+                    )
+                    all_x.append(cx)
+                    all_y.append(cy)
+
+            # Calculate plot bounds
+            if all_x and all_y:
+                margin = 2.0
+                x_range = [min(all_x) - margin, max(all_x) + margin]
+                y_range = [min(all_y) - margin, max(all_y) + margin]
+            else:
+                x_range = [-5, 20]
+                y_range = [-5, 20]
+
+            # Layout
+            fig.update_layout(
+                title=tool_input.title,
+                xaxis=dict(
+                    title="X (m)",
+                    scaleanchor="y",
+                    scaleratio=1,
+                    range=x_range,
+                    showgrid=True,
+                    gridcolor="rgba(200, 200, 200, 0.3)",
+                    griddash="dash",
+                ),
+                yaxis=dict(
+                    title="Y (m)",
+                    range=y_range,
+                    showgrid=True,
+                    gridcolor="rgba(200, 200, 200, 0.3)",
+                    griddash="dash",
+                ),
+                plot_bgcolor="white",
+                margin=dict(l=60, r=60, t=60, b=60),
+            )
+
+            return vkt.PlotlyResult(fig.to_json())
+
+        except Exception as e:
+            logger.exception(f"Error in footings_plot_view: {e}")
+            # Return empty figure on error
+            fig = go.Figure()
+            fig.update_layout(title="Error loading footings plot")
+            return vkt.PlotlyResult(fig.to_json())
